@@ -1,0 +1,5 @@
+{
+  "name": "TỔNG HỢP ĐỀ TỪ HÌNH ẢNH",
+  "description": "Ứng dụng tổng hợp đề thi từ hình ảnh và PDF, chuyển đổi công thức toán học sang LaTeX và hình vẽ sang TikZ, xuất ra file Word.",
+  "requestFramePermissions": []
+}
