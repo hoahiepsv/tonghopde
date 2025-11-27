@@ -15,39 +15,14 @@ export const initPyodide = async () => {
     pyodideLoadPromise = (async () => {
       console.log("Loading Pyodide...");
       try {
-          // Explicitly set indexURL to match the script tag version to prevent version mismatch errors
-          const pyodide = await window.loadPyodide({
-              indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/"
-          });
-          
-          // Retry logic for loading packages (fixes "Failed to fetch" on flaky networks)
-          const packages = ["numpy", "matplotlib"];
-          let attempts = 0;
-          const maxAttempts = 3;
-          
-          while (attempts < maxAttempts) {
-              try {
-                  await pyodide.loadPackage(packages);
-                  // Verify installation by trying to import
-                  pyodide.runPython("import matplotlib");
-                  break; // Success
-              } catch (err) {
-                  attempts++;
-                  console.warn(`Pyodide package load failed (attempt ${attempts}/${maxAttempts}):`, err);
-                  if (attempts >= maxAttempts) {
-                      throw new Error("Không thể tải thư viện vẽ hình (matplotlib). Vui lòng kiểm tra kết nối mạng và thử lại.");
-                  }
-                  // Wait 1.5s before retrying
-                  await new Promise(r => setTimeout(r, 1500));
-              }
-          }
-
+          const pyodide = await window.loadPyodide();
+          await pyodide.loadPackage(["numpy", "matplotlib"]);
           pyodideInstance = pyodide;
           console.log("Pyodide loaded successfully");
           return pyodide;
       } catch (e) {
           console.error("Failed to load Pyodide", e);
-          pyodideLoadPromise = null; // Reset on failure so we can try again
+          pyodideLoadPromise = null; // Reset on failure
           throw e;
       }
     })();
