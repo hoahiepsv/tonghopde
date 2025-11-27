@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
   <head>
@@ -25,40 +26,6 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #64748b;
       }
-
-      /* PRINT STYLES FOR PDF EXPORT */
-      @media print {
-        @page {
-          size: A4;
-          margin: 20mm;
-        }
-        body {
-          background: white;
-          color: black;
-        }
-        /* Hide everything by default */
-        body > * {
-          display: none !important;
-        }
-        /* Only show the print area */
-        #print-area {
-          display: block !important;
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          background: white;
-          font-size: 12pt;
-          line-height: 1.5;
-        }
-        #print-area * {
-          visibility: visible;
-        }
-        /* Hide buttons inside print area if any accidentally exist */
-        #print-area button {
-          display: none !important;
-        }
-      }
     </style>
   <script type="importmap">
 {
@@ -76,6 +43,7 @@
 }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
 </head>
   <body>
     <div id="root"></div>

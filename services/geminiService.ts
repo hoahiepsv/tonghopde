@@ -1,118 +1,208 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { GeminiModel } from '../types';
 import { fileToBase64 } from '../utils/fileHelpers';
 
-export const analyzeImage = async (apiKey: string, file: File): Promise<string> => {
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const makeApiCallWithRetry = async (apiCall: () => Promise<any>, retries = 2) => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await apiCall();
+        } catch (error: any) {
+            console.error(`API attempt ${i + 1} failed:`, error);
+            
+            // Check for Quota Exceeded (429) - Do not retry immediately, just throw specific error
+            if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota')) {
+                 throw new Error("Lỗi Quota: API Key đã hết hạn ngạch sử dụng. Vui lòng đợi hoặc đổi Key khác.");
+            }
+
+            if (i === retries - 1) throw error;
+            // Exponential backoff
+            await delay(2000 * (i + 1));
+        }
+    }
+};
+
+/**
+ * Robustly fixes common Python syntax errors using a character-based state machine.
+ * Specifically handles:
+ * 1. Newlines inside single/double quoted strings (SyntaxError: unterminated string literal).
+ * 2. Stray markdown backticks.
+ */
+const fixPythonCode = (code: string): string => {
+    // 1. Basic cleanup of wrapper markdown
+    let clean = code.replace(/```python/g, '').replace(/```/g, '').trim();
+    
+    // 2. State machine to fix newlines inside single-line strings (' or ")
+    let result = '';
+    let quoteChar: string | null = null; // Values: ' or " or ''' or """
+    let i = 0;
+    
+    while (i < clean.length) {
+        const char = clean[i];
+        
+        // Handle Escaped Characters (always skip next char check)
+        if (char === '\\' && i + 1 < clean.length) {
+            result += char + clean[i+1];
+            i += 2;
+            continue;
+        }
+        
+        // Check for Triple Quotes (Start)
+        const isTripleSingle = clean.startsWith("'''", i);
+        const isTripleDouble = clean.startsWith('"""', i);
+        
+        if (quoteChar === null) {
+            // Entering a string
+            if (isTripleDouble) { quoteChar = '"""'; result += '"""'; i += 3; continue; }
+            if (isTripleSingle) { quoteChar = "'''"; result += "'''"; i += 3; continue; }
+            if (char === '"') { quoteChar = '"'; result += '"'; i++; continue; }
+            if (char === "'") { quoteChar = "'"; result += "'"; i++; continue; }
+        } else {
+            // Already inside a string - check for closing
+            if (quoteChar === '"""' && isTripleDouble) { quoteChar = null; result += '"""'; i += 3; continue; }
+            if (quoteChar === "'''" && isTripleSingle) { quoteChar = null; result += "'''"; i += 3; continue; }
+            if (quoteChar === '"' && char === '"') { quoteChar = null; result += '"'; i++; continue; }
+            if (quoteChar === "'" && char === "'") { quoteChar = null; result += "'"; i++; continue; }
+            
+            // CRITICAL FIX: If inside a single-line string (' or ") and we hit a newline, replace it with space
+            if ((quoteChar === '"' || quoteChar === "'") && char === '\n') {
+                result += ' '; // Replace illegal newline with space
+                i++;
+                continue;
+            }
+        }
+        
+        // Regular character
+        result += char;
+        i++;
+    }
+    
+    return result;
+};
+
+export const analyzeImage = async (apiKey: string, file: File, modelId: string = GeminiModel.FLASH): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey });
   const base64Data = await fileToBase64(file);
   
   const prompt = `
-  Bạn là một chuyên gia số hoá tài liệu giáo dục và đồ hoạ toán học. 
-  Nhiệm vụ: Chuyển đổi hình ảnh/PDF đầu vào thành văn bản Markdown + LaTeX + TikZ với độ chính xác tuyệt đối.
+  Bạn là một chuyên gia số hoá tài liệu giáo dục.
+  Nhiệm vụ: Chuyển đổi hình ảnh đầu vào thành văn bản Markdown + LaTeX + Code Python minh hoạ.
 
   QUY TẮC BẤT KHẢ XÂM PHẠM:
 
   1. **VĂN BẢN & CÔNG THỨC (TEXT/MATH):**
-     - **CHÉP NGUYÊN VĂN**: Không thêm bớt, không sửa lỗi chính tả của đề gốc.
-     - **LATEX**: Chỉ dùng $...$ cho công thức toán (x, y, f(x), \alpha). Không dùng cho văn bản thường.
-     - Ví dụ: "Cho tam giác $ABC$" (Đúng), "$Cho$ $tam$ $giác$ $ABC$" (Sai).
+     - **CHÉP NGUYÊN VĂN**: Chỉ xuất nội dung có trong ảnh. TUYỆT ĐỐI KHÔNG thêm lời dẫn meta (VD: "Đây là nội dung...", "Kết quả:", "Lời giải:", "--- Hết ---").
+     - **LATEX**: Dùng $...$ cho toán học.
+     - **MŨI TÊN**: Thay \`\\Longrightarrow\` thành \`\\Rightarrow\`, \`\\Longleftarrow\` thành \`\\Leftarrow\`.
 
-  2. **HÌNH VẼ TIKZ (QUAN TRỌNG NHẤT - PHẢI GIỐNG 99.9%):**
-     - **Mục tiêu**: Hình vẽ TikZ phải là "bản sao kỹ thuật số" của hình gốc.
-     - **Yêu cầu chi tiết**:
-       + **HÌNH HỌC PHẲNG**: Bắt buộc dùng \`tkz-euclide\`. 
-         * Xác định tọa độ các điểm phải chuẩn tỷ lệ (Ví dụ: M là trung điểm AB thì code phải vẽ đúng trung điểm).
-         * Ký hiệu góc vuông, góc bằng nhau, đoạn thẳng bằng nhau: Phải có đầy đủ nếu hình gốc có (dùng \`tkzMarkRightAngle\`, \`tkzMarkAngle\`, \`tkzMarkSegment\`).
-         * Nhãn điểm (Label): Vị trí (trên/dưới/trái/phải) phải y hệt hình gốc.
-       + **ĐỒ THỊ HÀM SỐ**: Dùng \`pgfplots\` hoặc vẽ thủ công bằng \`plot\`. 
-         * Độ cong, chiều biến thiên, giao điểm với trục Ox/Oy, các điểm cực trị phải khớp hoàn toàn với hình ảnh.
-       + **HÌNH KHÔNG GIAN**: Dùng nét đứt (dashed) cho đường khuất, nét liền (solid) cho đường thấy. Đây là lỗi hay sai nhất, hãy kiểm tra kỹ.
-     - **Output**: Chỉ trả về code trong block \`\`\`tikz ... \`\`\`.
+  2. **VẼ HÌNH (QUAN TRỌNG - CHỈ DÙNG PYTHON MATPLOTLIB):**
+     - **MỤC TIÊU**: Tái tạo hình ảnh với **GÓC NHÌN (PERSPECTIVE)** giống hệt ảnh gốc.
+     - **Output**: \`\`\`python ... \`\`\`. Tách từng hình thành block code riêng.
+     - **SYNTAX (RẤT QUAN TRỌNG)**:
+       - **CẤM XUỐNG DÒNG TRONG CHUỖI**: \`ax.text(x, y, r'$Label$')\` phải viết trên **MỘT DÒNG**.
+       - Nếu label dài, hãy viết liền trong chuỗi \`r'...\'\`. KHÔNG ĐƯỢC enter xuống dòng ở giữa hai dấu nháy đơn.
+       - ❌ SAI: 
+         \`ax.text(x, y, r'$A\`
+         \`$')\`
+       - ✅ ĐÚNG: \`ax.text(x, y, r'$A$')\`
+     
+     **Kỹ thuật Matplotlib:**
+     - \`fig = plt.figure(figsize=(5, 5))\`.
+     - **3D**: \`ax = fig.add_subplot(111, projection='3d')\`. Dùng \`ax.view_init(elev=..., azim=...)\` để xoay camera khớp ảnh.
+     - **2D**: \`ax = fig.add_subplot(111)\`. \`plt.axis('equal')\`. Sao chép tọa độ tương đối từ ảnh (đừng vẽ hình đều nếu ảnh gốc bị dẹt/nghiêng).
 
   3. **ĐỊNH DẠNG**:
-     - Không nói nhảm, vào thẳng nội dung.
-     - Giữ nguyên cấu trúc xuống dòng của đề bài.
+     - Chỉ trả về Markdown.
+     - Không viết thêm bất kỳ dòng chữ nào ngoài nội dung.
 
   Hãy xử lý hình ảnh đính kèm:
   `;
 
-  try {
-    const modelId = GeminiModel.PRO; 
-    
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [
-            { text: prompt },
-            {
-                inlineData: {
-                    mimeType: file.type,
-                    data: base64Data
-                }
-            }
-        ]
-      },
-      config: {
-        thinkingConfig: { thinkingBudget: 4096 } // Max budget for precision
-      }
-    });
+  // Reduce thinking budget for Flash to avoid Quota issues
+  const isFlash = modelId.includes('flash');
+  const budget = isFlash ? 1024 : 4096;
 
-    return response.text || "";
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
-  }
+  return await makeApiCallWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: modelId,
+        contents: {
+          parts: [
+              { text: prompt },
+              {
+                  inlineData: {
+                      mimeType: file.type,
+                      data: base64Data
+                  }
+              }
+          ]
+        },
+        config: {
+          thinkingConfig: { thinkingBudget: budget } 
+        }
+      });
+
+      let text = response.text || "";
+      
+      const parts = text.split(/(```[\s\S]*?```)/g);
+      text = parts.map(part => {
+          if (part.startsWith('```')) {
+              // Extract the code content inside the backticks
+              const match = part.match(/```(?:python)?([\s\S]*?)```/);
+              if (match) {
+                  const rawCode = match[1];
+                  const cleanCode = fixPythonCode(rawCode);
+                  return `\`\`\`python\n${cleanCode}\n\`\`\``;
+              }
+              return part;
+          }
+          
+          // Text processing
+          let p = part;
+          p = p.replace(/\\Longrightarrow/g, '\\Rightarrow');
+          p = p.replace(/\\Longleftarrow/g, '\\Leftarrow');
+          p = p.replace(/\{aligned\}/g, '{align}');
+          p = p.replace(/Figure/g, 'Hình');
+          p = p.replace(/--- HẾT ---/gi, '');
+          return p;
+      }).join('');
+
+      return text.trim();
+  });
 };
 
-export const refineTikzCode = async (apiKey: string, file: File, currentCode: string): Promise<string> => {
+export const refineCode = async (apiKey: string, file: File, currentCode: string, modelId: string = GeminiModel.FLASH): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey });
   const base64Data = await fileToBase64(file);
 
   const prompt = `
-  Nhiệm vụ: SỬA MÃ TIKZ ĐỂ GIỐNG HỆT HÌNH ẢNH GỐC.
-  
-  Mã hiện tại đang có sai sót so với hình ảnh đính kèm. Bạn hãy đóng vai một "máy photocopy chạy bằng code":
-  
+  Nhiệm vụ: TINH CHỈNH CODE PYTHON.
+  1. **GÓC NHÌN**: Chỉnh \`ax.view_init\` (3D) hoặc toạ độ (2D) để khớp ảnh gốc.
+  2. **SỬA LỖI CÚ PHÁP**: Đảm bảo \`ax.text(..., r'String')\` nằm trên 1 dòng duy nhất. Không xuống dòng trong chuỗi.
+
   Mã hiện tại:
-  \`\`\`latex
+  \`\`\`python
   ${currentCode}
   \`\`\`
-
-  YÊU CẦU CHỈNH SỬA CHI TIẾT:
-  1. **Nét vẽ**: Kiểm tra từng đường thẳng. Đường nào trong ảnh là Nét Đứt (dashed) mà code đang vẽ Nét Liền? Sửa ngay lập tức.
-  2. **Tọa độ & Tỷ lệ**: Hình vẽ có bị méo không? Các điểm có đúng vị trí tương đối không? (VD: Đường cao có thực sự vuông góc không?)
-  3. **Ký hiệu**: Hình gốc có ký hiệu góc vuông, gạch chéo đoạn thẳng bằng nhau không? Thêm vào ngay (dùng tkz-euclide).
-  4. **Font chữ & Nhãn**: Các điểm A, B, C, ... có nằm đúng phía như trong ảnh không?
   
-  Hãy trả về toàn bộ mã TikZ đã sửa (bao gồm cả môi trường tikzpicture) trong block \`\`\`tikz ... \`\`\`.
+  Trả về mã Python đã sửa.
   `;
 
-  try {
+  return await makeApiCallWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: GeminiModel.PRO,
+      model: modelId,
       contents: {
-        parts: [
-            { text: prompt },
-            {
-                inlineData: {
-                    mimeType: file.type,
-                    data: base64Data
-                }
-            }
-        ]
+        parts: [ { text: prompt }, { inlineData: { mimeType: file.type, data: base64Data } } ]
       },
-      config: {
-        thinkingConfig: { thinkingBudget: 4096 } // High budget for detailed visual analysis
-      }
+      config: { thinkingConfig: { thinkingBudget: modelId.includes('flash') ? 1024 : 4096 } }
     });
     
-    // Extract code block
     const text = response.text || "";
-    const match = text.match(/```(?:tikz|latex)?([\s\S]*?)```/);
-    return match ? match[1].trim() : text.trim();
-  } catch (error) {
-    console.error("Refine TikZ Error:", error);
-    throw error;
-  }
+    const match = text.match(/```(?:python)?([\s\S]*?)```/);
+    let code = match ? match[1].trim() : text.trim();
+    
+    code = fixPythonCode(code);
+
+    return code;
+  });
 };
