@@ -1,26 +1,33 @@
 
-export interface ProcessedFile {
+export enum AiModel {
+  FLASH = 'gemini-3-flash-preview',
+  PRO = 'gemini-3-pro-preview'
+}
+
+export interface FileData {
   id: string;
-  originalFile: File;
-  status: 'idle' | 'processing' | 'success' | 'error';
-  extractedContent?: string; // Markdown/LaTeX content
-  errorMsg?: string;
+  file: File;
+  name: string;
+  type: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  content?: string;
+  previewUrl?: string;
+  base64?: string;
 }
 
-export interface AppConfig {
-  apiKey: string;
+export interface ProcessingResult {
+  text: string;
+  parts: ContentPart[];
 }
 
-export enum GeminiModel {
-  PRO = 'gemini-3-pro-preview',
-  FLASH = 'gemini-2.5-flash',
-}
+export type ContentPart = 
+  | { type: 'text'; content: string; isSolutionStart?: boolean }
+  | { type: 'python'; code: string; originalCode?: string }
+  | { type: 'image_prompt'; prompt: string; originalPrompt?: string };
 
-// Global definition for Cropper.js loaded via CDN
-declare global {
-  class Cropper {
-    constructor(element: HTMLImageElement, options?: any);
-    getCroppedCanvas(options?: any): HTMLCanvasElement;
-    destroy(): void;
-  }
+export interface AppState {
+  model: AiModel;
+  files: FileData[];
+  isProcessing: boolean;
+  result?: string;
 }

@@ -1,5 +1,7 @@
 {
-  "name": "TỔNG HỢP ĐỀ TỪ HÌNH ẢNH",
-  "description": "Ứng dụng tổng hợp đề thi từ hình ảnh và PDF, chuyển đổi công thức toán học sang LaTeX và hình vẽ sang TikZ, xuất ra file Word.",
-  "requestFramePermissions": []
+  "name": "TỔNG HỢP BÀI TẬP & CHUYỂN ĐỔI PDF2DOC",
+  "description": "Ứng dụng thông minh hỗ trợ tổng hợp bài tập, giải toán hình học và chuyển đổi tài liệu sang Word chất lượng cao với AI.",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }
