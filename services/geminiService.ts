@@ -1,177 +1,122 @@
+
 import { GoogleGenAI } from "@google/genai";
-import { GeminiModel } from '../types';
-import { fileToBase64 } from '../utils/fileHelpers';
+import { AiModel, ContentPart } from "../types";
+import { SYSTEM_INSTRUCTION } from "../constants";
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Helper để lấy API Key ưu tiên từ tham số truyền vào, sau đó là env
+const getAI = (apiKey?: string) => {
+  const finalKey = apiKey || process.env.API_KEY || '';
+  return new GoogleGenAI({ apiKey: finalKey });
+};
 
-const makeApiCallWithRetry = async (apiCall: () => Promise<any>, retries = 2) => {
-    for (let i = 0; i < retries; i++) {
-        try {
-            return await apiCall();
-        } catch (error: any) {
-            console.error(`API attempt ${i + 1} failed:`, error);
-            
-            // Check for Quota Exceeded (429) - Do not retry immediately, just throw specific error
-            if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota')) {
-                 throw new Error("Lỗi Quota: API Key đã hết hạn ngạch sử dụng. Vui lòng đợi hoặc đổi Key khác.");
-            }
+export const callGemini = async (
+  modelName: AiModel,
+  files: { data: string; mimeType: string }[],
+  shouldSolve: boolean,
+  apiKey?: string
+): Promise<string> => {
+  const ai = getAI(apiKey);
+  
+  const fileParts = files.map(f => ({
+    inlineData: {
+      data: f.data.split(',')[1],
+      mimeType: f.mimeType
+    }
+  }));
 
-            if (i === retries - 1) throw error;
-            // Exponential backoff
-            await delay(2000 * (i + 1));
+  const solvePrompt = shouldSolve 
+    ? "\n\nYÊU CẦU: Sau khi trích xuất xong, hãy giải chi tiết toàn bộ các bài tập trên và đặt sau thẻ [[SOLUTION_START]]."
+    : "\n\nYÊU CẦU: Chỉ trích xuất nội dung nguyên bản, tuyệt đối không giải hay thêm bớt từ ngữ.";
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: {
+      parts: [
+        ...fileParts,
+        { text: "Hãy thực hiện trích xuất nội dung từ tài liệu này theo đúng định dạng yêu cầu." + solvePrompt }
+      ]
+    },
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      temperature: 0.1,
+    }
+  });
+
+  return response.text || "";
+};
+
+export const refinePlotCode = async (currentCode: string, feedback: string, apiKey?: string): Promise<string> => {
+  const ai = getAI(apiKey);
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Mã Python hiện tại: \n${currentCode}\n\nYêu cầu chỉnh sửa: ${feedback}\n\nHãy trả về mã Python mới trong block [[GEOMETRY_CODE]].`,
+    config: { systemInstruction: SYSTEM_INSTRUCTION }
+  });
+  const match = response.text?.match(/\[\[GEOMETRY_CODE\]\]([\s\S]*?)\[\[\/GEOMETRY_CODE\]\]/);
+  return match ? match[1].trim() : currentCode;
+};
+
+export const refinePrompt = async (currentPrompt: string, feedback: string, apiKey?: string): Promise<string> => {
+  const ai = getAI(apiKey);
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Prompt hiện tại: \n${currentPrompt}\n\nYêu cầu chỉnh sửa: ${feedback}\n\nHãy trả về prompt tiếng Anh mới trong block [[AI_IMAGE_PROMPT]].`,
+    config: { systemInstruction: SYSTEM_INSTRUCTION }
+  });
+  const match = response.text?.match(/\[\[AI_IMAGE_PROMPT\]\]([\s\S]*?)\[\[\/AI_IMAGE_PROMPT\]\]/);
+  return match ? match[1].trim() : currentPrompt;
+};
+
+export const generateAiImage = async (prompt: string, apiKey?: string): Promise<string> => {
+  const ai = getAI(apiKey);
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash-image',
+    contents: {
+      parts: [{ text: `Create a professional educational illustration: ${prompt}` }]
+    }
+  });
+
+  for (const part of response.candidates?.[0]?.content?.parts || []) {
+    if (part.inlineData) {
+      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    }
+  }
+  return "";
+};
+
+export const parseContent = (text: string): ContentPart[] => {
+  const parts: ContentPart[] = [];
+  const mainSplit = text.split('[[SOLUTION_START]]');
+  const mainContent = mainSplit[0];
+  const solutionContent = mainSplit[1] ? `\n\n# ĐÁP ÁN & LỜI GIẢI CHI TIẾT\n\n${mainSplit[1]}` : "";
+  const fullProcessedText = mainContent + (solutionContent ? `[[IS_SOLUTION]]${solutionContent}` : "");
+
+  const regex = /\[\[(GEOMETRY_CODE|AI_IMAGE_PROMPT)\]\]([\s\S]*?)\[\[\/\1\]\]|\[\[IS_SOLUTION\]\]/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(fullProcessedText)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: fullProcessedText.substring(lastIndex, match.index) });
+    }
+    
+    if (match[0] === '[[IS_SOLUTION]]') {
+        parts.push({ type: 'text', content: "", isSolutionStart: true } as any);
+    } else {
+        const type = match[1];
+        const content = match[2].trim();
+        if (type === 'GEOMETRY_CODE') {
+          parts.push({ type: 'python', code: content });
+        } else {
+          parts.push({ type: 'image_prompt', prompt: content });
         }
     }
-};
+    lastIndex = regex.lastIndex;
+  }
 
-// Helper function to fix common Python syntax errors generated by LLMs
-const fixPythonSyntax = (code: string): string => {
-    let fixed = code;
-    // Fix 1: Unterminated string literals in ax.text/plt.text
-    // Regex logic: Find text(..., r'$... <newline> ...$') and join them.
-    // This is a heuristic and handles the specific error seen in logs.
-    fixed = fixed.replace(/(\.text\([^)]*r'[^']*)\n\s*([^']*'\))/g, "$1$2");
-    fixed = fixed.replace(/(\.text\([^)]*'[^']*)\n\s*([^']*'\))/g, "$1$2");
-    return fixed;
-};
+  if (lastIndex < fullProcessedText.length) {
+    parts.push({ type: 'text', content: fullProcessedText.substring(lastIndex) });
+  }
 
-export const analyzeImage = async (apiKey: string, file: File, modelId: string = GeminiModel.FLASH): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey });
-  const base64Data = await fileToBase64(file);
-  
-  const prompt = `
-  Bạn là một chuyên gia số hoá tài liệu giáo dục.
-  Nhiệm vụ: Chuyển đổi hình ảnh đầu vào thành văn bản Markdown + LaTeX + Code Python minh hoạ.
-
-  QUY TẮC BẤT KHẢ XÂM PHẠM:
-
-  1. **VĂN BẢN & CÔNG THỨC (TEXT/MATH):**
-     - **CHÉP NGUYÊN VĂN**: Chỉ xuất nội dung có trong ảnh. TUYỆT ĐỐI KHÔNG thêm lời dẫn meta (VD: "Đây là nội dung...", "Kết quả:", "Lời giải:", "--- Hết ---").
-     - **KHÔNG** tự ý thêm tiêu đề bài viết nếu trong ảnh không có.
-     - **LATEX**: Dùng $...$ cho toán học.
-     - **MŨI TÊN**: Thay \`\\Longrightarrow\` thành \`\\Rightarrow\`, \`\\Longleftarrow\` thành \`\\Leftarrow\`.
-
-  2. **VẼ HÌNH (QUAN TRỌNG - CHỈ DÙNG PYTHON):**
-     - **MỤC TIÊU TỐI THƯỢNG**: Hình vẽ output phải có **GÓC NHÌN (PERSPECTIVE)** và **DÁNG VẺ** giống hệt ảnh gốc.
-     - **Output code**: \`\`\`python ... \`\`\`.
-     - **NẾU CÓ NHIỀU HÌNH**: Tách thành các block code Python riêng biệt. Đừng gộp chung.
-     
-     **Kỹ thuật Matplotlib bắt buộc:**
-     - **Setup**: \`fig = plt.figure(figsize=(5, 5))\` (Giữ kích thước nhỏ gọn 5-6 inches).
-     
-     **A. NẾU LÀ HÌNH KHÔNG GIAN (3D - Hình chóp, Nón, Trụ, Cầu...):**
-       - BẮT BUỘC dùng: \`ax = fig.add_subplot(111, projection='3d')\`.
-       - **GÓC NHÌN CAMERA**: Phải dùng lệnh \`ax.view_init(elev=..., azim=...)\` để xoay hình cho KHỚP với ảnh gốc. Thử nghiệm các giá trị \`elev\` (độ cao) và \`azim\` (góc xoay) để tìm ra góc nhìn giống nhất.
-       - Tắt khung 3D thừa nếu cần: \`ax.set_axis_off()\`.
-       - Vẽ các cạnh khuất bằng nét đứt (\`linestyle='--'\`).
-
-     **B. NẾU LÀ HÌNH PHẲNG (2D):**
-       - Dùng \`ax = fig.add_subplot(111)\`.
-       - **SAO CHÉP TỌA ĐỘ**: Đừng vẽ hình lý tưởng (VD: Tam giác đều chuẩn). Hãy nhìn ảnh gốc xem đỉnh A, B, C nằm ở đâu và ước lượng toạ độ \`(x, y)\` tương ứng để hình vẽ có độ nghiêng/dẹt giống hệt ảnh.
-       - Dùng \`plt.axis('equal')\` và \`plt.axis('off')\` (nếu không phải đồ thị hàm số).
-     
-     **C. TRÁNH LỖI SYNTAX (CỰC KỲ QUAN TRỌNG):**
-       - **KHÔNG NGẮT DÒNG TRONG STRING**: Tuyệt đối không để xuống dòng giữa chuỗi string trong lệnh \`text()\`.
-         - ❌ SAI (Gây lỗi): 
-           \`ax.text(x, y, r'$A\`
-           \`$')\`
-         - ✅ ĐÚNG: \`ax.text(x, y, r'$A$')\`
-       - Hãy viết gọn label trên một dòng code duy nhất.
-
-  3. **ĐỊNH DẠNG**:
-     - Chỉ trả về Markdown. Không bọc trong JSON.
-     - **CẤM**: Không viết thêm bất kỳ dòng chữ nào ngoài nội dung đề bài và code. Không "Lời giải", không "Kết luận".
-
-  Hãy xử lý hình ảnh đính kèm:
-  `;
-
-  // Reduce thinking budget for Flash to 0 or low value to avoid "Resource Exhausted" (429) on free tier.
-  // Flash is smart enough for this task without extensive thinking tokens.
-  const isFlash = modelId.includes('flash');
-  const budget = isFlash ? 1024 : 4096;
-
-  return await makeApiCallWithRetry(async () => {
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: {
-          parts: [
-              { text: prompt },
-              {
-                  inlineData: {
-                      mimeType: file.type,
-                      data: base64Data
-                  }
-              }
-          ]
-        },
-        config: {
-          thinkingConfig: { thinkingBudget: budget } 
-        }
-      });
-
-      let text = response.text || "";
-      
-      // Post-processing
-      // 1. Fix common syntax errors in generated Python code BEFORE splitting
-      text = fixPythonSyntax(text);
-
-      const parts = text.split(/(```[\s\S]*?```)/g);
-      text = parts.map(part => {
-          if (part.startsWith('```')) return part;
-          let p = part;
-          p = p.replace(/\\Longrightarrow/g, '\\Rightarrow');
-          p = p.replace(/\\Longleftarrow/g, '\\Leftarrow');
-          p = p.replace(/\{aligned\}/g, '{align}');
-          p = p.replace(/Figure/g, 'Hình');
-          p = p.replace(/--- HẾT ---/gi, '');
-          return p;
-      }).join('');
-
-      return text.trim();
-  });
-};
-
-export const refineCode = async (apiKey: string, file: File, currentCode: string, modelId: string = GeminiModel.FLASH): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey });
-  const base64Data = await fileToBase64(file);
-
-  const prompt = `
-  Nhiệm vụ: TINH CHỈNH CODE PYTHON ĐỂ HÌNH VẼ CÓ GÓC NHÌN (PERSPECTIVE) GIỐNG HỆT ẢNH GỐC.
-  
-  Mã hiện tại:
-  \`\`\`python
-  ${currentCode}
-  \`\`\`
-
-  Yêu cầu sửa đổi: 
-  1. **GÓC NHÌN (Quan trọng nhất)**:
-     - Nếu là 3D: Hãy chỉnh tham số \`ax.view_init(elev=..., azim=...)\` để xoay hình trùng khớp với hướng nhìn trong ảnh.
-     - Nếu là 2D: Di chuyển toạ độ các điểm sao cho dáng hình (độ dẹt, độ nghiêng) khớp với ảnh.
-  2. **TRÁNH LỖI SYNTAX**:
-     - **KHÔNG ĐƯỢC NGẮT DÒNG TRONG STRING**: \`ax.text(..., r'abc')\` phải nằm trên 1 dòng.
-     - Kiểm tra đóng mở ngoặc đầy đủ.
-  3. **KỸ THUẬT**:
-     - Giữ nguyên \`figsize\` hợp lý.
-     - Đảm bảo code chạy được, import đầy đủ (matplotlib.pyplot as plt, numpy as np).
-
-  Trả về duy nhất mã Python đã sửa trong block code.
-  `;
-
-  return await makeApiCallWithRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: {
-        parts: [ { text: prompt }, { inlineData: { mimeType: file.type, data: base64Data } } ]
-      },
-      config: { thinkingConfig: { thinkingBudget: modelId.includes('flash') ? 1024 : 4096 } }
-    });
-    
-    const text = response.text || "";
-    const match = text.match(/```(?:python)?([\s\S]*?)```/);
-    let code = match ? match[1].trim() : text.trim();
-    
-    // Apply syntax fix
-    code = fixPythonSyntax(code);
-
-    return code;
-  });
+  return parts;
 };
