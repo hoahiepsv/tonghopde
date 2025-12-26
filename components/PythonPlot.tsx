@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Loader2, MessageSquare, Send, Copy, Image as ImageIcon, ChevronDown } from 'lucide-react';
+import { RefreshCw, Loader2, Send, Copy, Image as ImageIcon, ChevronDown } from 'lucide-react';
 import { refinePlotCode } from '../services/geminiService';
 import ImageCropper from './ImageCropper';
 
@@ -23,9 +23,16 @@ const PythonPlot: React.FC<PythonPlotProps> = ({ code: initialCode, sourceFiles,
   const [error, setError] = useState<string | null>(null);
   const pyodideRef = useRef<any>(null);
 
+  const cleanCode = (rawCode: string) => {
+    // Remove markdown code fences if present
+    return rawCode.replace(/```python/g, '').replace(/```/g, '').trim();
+  };
+
   const runPython = async (targetCode: string) => {
     setIsLoading(true);
     setError(null);
+    const cleaned = cleanCode(targetCode);
+    
     try {
       if (!pyodideRef.current) {
         // @ts-ignore
@@ -41,25 +48,37 @@ import base64
 
 plt.clf()
 plt.close('all')
-# Tự động chọn kích thước hình ảnh dựa trên loại nội dung
-fig = plt.figure(figsize=(8, 5))
+fig = plt.figure(figsize=(8, 6))
 
-# Thực thi mã từ AI
-${targetCode}
+# Execute AI code
+try:
+    ${cleaned.split('\n').map(line => '    ' + line).join('\n').trimStart()}
+except Exception as e:
+    print(f"Python Error: {e}")
+    raise e
 
-# Hậu xử lý thông minh: Nếu không có trục nào được vẽ (hình học phẳng), ẩn axis.
-# Nếu là biểu đồ hàm số/thống kê, giữ nguyên để hiển thị đơn vị.
-is_statistical = any(['bar' in line or 'pie' in line or 'axhline' in line for line in """${targetCode}""".split('\\n')])
+# Intelligent post-processing
+# Check if content is statistical or geometry
+code_content = """${cleaned}"""
+is_3d = 'projection=\\'3d\\'' in code_content
+is_statistical = any(k in code_content for k in ['bar(', 'pie(', 'axhline', 'hist('])
 
-if not is_statistical:
-    plt.axis('equal')
-    plt.axis('off')
-    plt.grid(False)
+if is_3d:
+    # Standard 3D view if not specified
+    if 'view_init' not in code_content:
+        for ax in fig.get_axes():
+            if hasattr(ax, 'view_init'):
+                ax.view_init(elev=20, azim=45)
 else:
-    plt.tight_layout()
+    if not is_statistical:
+        plt.axis('equal')
+        plt.axis('off')
+        plt.grid(False)
+    else:
+        plt.tight_layout()
 
 buf = io.BytesIO()
-plt.savefig(buf, format='png', bbox_inches='tight', dpi=200, transparent=False, facecolor='white')
+plt.savefig(buf, format='png', bbox_inches='tight', dpi=200, facecolor='white')
 buf.seek(0)
 img_str = base64.b64encode(buf.read()).decode('utf-8')
 "data:image/png;base64," + img_str
@@ -114,7 +133,7 @@ img_str = base64.b64encode(buf.read()).decode('utf-8')
       
       <div className="bg-slate-50 px-4 py-2 border-b flex justify-between items-center">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-          <ImageIcon className="w-3 h-3" /> Bản vẽ kỹ thuật & Đồ thị
+          <ImageIcon className="w-3 h-3" /> Vẽ Hình Học & Đồ Thị (Python)
         </span>
         <div className="flex gap-2">
           <div className="relative">
@@ -157,7 +176,7 @@ img_str = base64.b64encode(buf.read()).decode('utf-8')
             type="text" 
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            placeholder="Ví dụ: 'Thêm đồ thị hàm số y=2x', 'Đổi sang biểu đồ tròn'..."
+            placeholder="Ví dụ: 'Thêm góc vuông tại A', 'Xoay camera 3D'..."
             className="flex-1 bg-white border border-blue-100 px-4 py-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             onKeyDown={(e) => e.key === 'Enter' && handleRefine()}
           />
@@ -175,14 +194,19 @@ img_str = base64.b64encode(buf.read()).decode('utf-8')
         {isLoading && !imgData && (
           <div className="flex flex-col items-center">
             <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
-            <p className="text-sm text-slate-400 font-bold tracking-widest uppercase">Đang tính toán biểu đồ...</p>
+            <p className="text-sm text-slate-400 font-bold tracking-widest uppercase">Đang thực thi mã Python...</p>
           </div>
         )}
-        {error && <div className="text-red-500 text-[10px] font-mono p-4 bg-red-50 rounded-xl w-full overflow-auto max-h-[150px]">{error}</div>}
+        {error && (
+           <div className="w-full">
+             <p className="text-red-500 text-xs font-bold mb-2">Lỗi Syntax/Runtime Python:</p>
+             <div className="text-red-500 text-[10px] font-mono p-4 bg-red-50 rounded-xl w-full overflow-auto max-h-[150px]">{error}</div>
+             <button onClick={() => runPython(code)} className="mt-4 text-[10px] font-bold text-blue-600 underline">Thử chạy lại</button>
+           </div>
+        )}
         {imgData && !isLoading && (
           <div className="relative group">
-            <img src={imgData} alt="Geometric Plot" className="max-w-full h-auto rounded-xl shadow-inner border border-slate-50" />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors rounded-xl pointer-events-none"></div>
+            <img src={imgData} alt="Python Generated Plot" className="max-w-full h-auto rounded-xl shadow-inner border border-slate-50" />
           </div>
         )}
       </div>
