@@ -108,7 +108,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Header */}
       <header className="bg-white border-b px-8 py-4 flex justify-between items-center shadow-sm sticky top-0 z-50">
         <div className="flex items-center gap-4">
@@ -116,14 +116,15 @@ const App: React.FC = () => {
             {LOGO_SVG}
           </div>
           <div>
-            <h1 className="text-xl font-black text-blue-900 tracking-tighter">
+            <h1 className="text-xl font-black text-blue-900 tracking-tighter uppercase">
               {APP_NAME}
             </h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hoà Hiệp AI v3.2</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Version 4.0 - Hoà Hiệp AI</p>
           </div>
         </div>
+        
         <div className="flex items-center gap-6">
-          <div className="hidden md:block text-right">
+          <div className="hidden lg:block text-right">
             <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
               {COPYRIGHT_TEXT}
             </p>
@@ -151,10 +152,10 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 overflow-hidden">
-        {/* Settings & Upload */}
+        {/* Left Sidebar */}
         <div className="lg:col-span-4 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
           
-          {/* API Key Section */}
+          {/* API Key Configuration */}
           <section className="bg-white p-6 rounded-3xl shadow-sm border border-blue-50 animate-in fade-in slide-in-from-left duration-500">
             <div className="flex items-center gap-2 mb-4">
               <Key className="w-5 h-5 text-blue-500" />
@@ -179,16 +180,14 @@ const App: React.FC = () => {
                 {isKeySaved ? <><Edit3 className="w-4 h-4" /> CHỈNH SỬA</> : <><Save className="w-4 h-4" /> LƯU</>}
               </button>
             </div>
-            {!isKeySaved && <p className="mt-2 text-[10px] text-slate-400 italic">API Key được lưu an toàn trong trình duyệt.</p>}
           </section>
 
           <section className="bg-white p-6 rounded-3xl shadow-sm border border-blue-50">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-blue-500" />
-                <h2 className="font-black uppercase tracking-tighter text-slate-700">Tùy chỉnh AI</h2>
+                <h2 className="font-black uppercase tracking-tighter text-slate-700">Tùy chỉnh Xử lý</h2>
               </div>
-              <Sparkles className="w-4 h-4 text-blue-200" />
             </div>
 
             <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group hover:border-blue-200 transition-colors">
@@ -197,19 +196,12 @@ const App: React.FC = () => {
                   <BrainCircuit className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="font-black text-sm text-slate-700 tracking-tight">Giải chi tiết đề bài</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tạo trang đáp án riêng</p>
+                  <p className="font-black text-sm text-slate-700 tracking-tight">Giải toán & Bài tập</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tạo lời giải chi tiết</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setShouldSolve(!shouldSolve)}
-                className="transition-transform active:scale-90"
-              >
-                {shouldSolve ? (
-                  <ToggleRight className="w-12 h-12 text-blue-600" />
-                ) : (
-                  <ToggleLeft className="w-12 h-12 text-slate-200" />
-                )}
+              <button onClick={() => setShouldSolve(!shouldSolve)}>
+                {shouldSolve ? <ToggleRight className="w-12 h-12 text-blue-600" /> : <ToggleLeft className="w-12 h-12 text-slate-200" />}
               </button>
             </div>
           </section>
@@ -217,38 +209,30 @@ const App: React.FC = () => {
           <section className="bg-white p-6 rounded-3xl shadow-sm border border-blue-50">
             <div className="flex items-center gap-2 mb-6">
               <FileSearch className="w-5 h-5 text-blue-500" />
-              <h2 className="font-black uppercase tracking-tighter text-slate-700">Tài liệu đầu vào</h2>
+              <h2 className="font-black uppercase tracking-tighter text-slate-700">Danh sách File</h2>
             </div>
 
             <div 
-              className="border-4 border-dashed border-blue-50 rounded-3xl p-10 text-center hover:bg-blue-50/50 hover:border-blue-200 transition-all cursor-pointer group mb-6"
+              className="border-2 border-dashed border-blue-100 rounded-3xl p-6 text-center hover:bg-blue-50 transition-all cursor-pointer group mb-6"
               onClick={() => document.getElementById('file-upload')?.click()}
             >
               <input id="file-upload" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="hidden" onChange={handleFileUpload} />
-              <div className="bg-white w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-100 group-hover:scale-110 transition-transform">
-                <Plus className="text-blue-600 w-8 h-8" />
-              </div>
-              <p className="font-black text-slate-700 text-sm tracking-tight uppercase">Thêm tài liệu mới</p>
-              <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">Hỗ trợ PDF, Image, Word</p>
+              <Plus className="text-blue-600 w-8 h-8 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+              <p className="font-bold text-slate-600 text-xs uppercase tracking-widest">Thêm PDF/Ảnh/Word</p>
             </div>
 
-            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-3">
               {files.map(file => (
-                <div key={file.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl group border border-transparent hover:border-blue-100 hover:bg-white transition-all shadow-sm">
-                  <div className="bg-white p-2.5 rounded-xl shadow-sm border border-slate-100">
-                    {file.type.startsWith('image/') ? (
-                      <ImageIcon className="w-5 h-5 text-emerald-500" />
-                    ) : (
-                      <FileText className="w-5 h-5 text-blue-500" />
-                    )}
+                <div key={file.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl group border border-transparent hover:border-blue-100 hover:bg-white transition-all shadow-sm">
+                  <div className="bg-white p-2 rounded-xl border">
+                    {file.type.startsWith('image/') ? <ImageIcon className="w-4 h-4 text-emerald-500" /> : <FileText className="w-4 h-4 text-blue-500" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-slate-700 truncate tracking-tight">{file.name}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Sẵn sàng</p>
+                    <p className="text-xs font-bold text-slate-700 truncate tracking-tight">{file.name}</p>
                   </div>
                   <button 
                     onClick={(e) => { e.stopPropagation(); removeFile(file.id); }}
-                    className="p-2 bg-white text-slate-300 hover:text-red-500 rounded-xl transition-all shadow-sm opacity-0 group-hover:opacity-100"
+                    className="p-2 text-slate-300 hover:text-red-500 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -259,94 +243,62 @@ const App: React.FC = () => {
             <button 
               disabled={isProcessing || files.length === 0}
               onClick={processFiles}
-              className={`w-full mt-8 py-5 rounded-2xl flex items-center justify-center gap-3 font-black text-sm tracking-widest shadow-xl transition-all transform active:scale-95 ${
+              className={`w-full mt-8 py-5 rounded-2xl flex items-center justify-center gap-3 font-black text-sm tracking-widest transition-all ${
                 isProcessing || files.length === 0
-                  ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
-                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
+                  ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-100 active:scale-95'
               }`}
             >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  ĐANG PHÂN TÍCH...
-                </>
-              ) : (
-                <>
-                  <Send className="w-5 h-5" />
-                  BẮT ĐẦU XỬ LÝ
-                </>
-              )}
+              {isProcessing ? <><Loader2 className="w-5 h-5 animate-spin" /> ĐANG XỬ LÝ...</> : <><Send className="w-5 h-5" /> BẮT ĐẦU</>}
             </button>
             
             {error && (
-              <div className="mt-6 p-4 bg-red-50 border border-red-100 text-red-600 text-[11px] font-black rounded-2xl flex items-center gap-3 animate-in fade-in">
-                <AlertCircle className="shrink-0 w-4 h-4" />
-                <span className="uppercase tracking-tight">{error}</span>
+              <div className="mt-4 p-3 bg-red-50 border border-red-100 text-red-600 text-[10px] font-bold rounded-xl flex items-center gap-2">
+                <AlertCircle className="shrink-0 w-3 h-3" />
+                <span>{error}</span>
               </div>
             )}
           </section>
         </div>
 
-        {/* Preview Content */}
+        {/* Preview Area */}
         <div className="lg:col-span-8 overflow-hidden h-full flex flex-col">
-          {!result && !isProcessing && (
-            <div className="bg-white h-full rounded-[40px] shadow-sm border border-dashed border-slate-200 flex flex-col items-center justify-center p-12 text-center">
-              <div className="w-32 h-32 bg-blue-50 rounded-[40px] flex items-center justify-center mb-8 rotate-3 shadow-inner">
-                <FileSearch className="w-16 h-16 text-blue-200" />
-              </div>
-              <h2 className="text-2xl font-black text-slate-800 mb-3 uppercase tracking-tighter">Khu vực Xem trước</h2>
-              <p className="text-slate-400 text-sm max-w-xs font-bold leading-relaxed">Vui lòng tải lên tài liệu để bắt đầu quy trình chuyển đổi.</p>
-            </div>
-          )}
-
-          {isProcessing && (
+          {isProcessing ? (
             <div className="bg-white h-full rounded-[40px] shadow-sm border border-blue-50 flex flex-col items-center justify-center p-12 text-center animate-in fade-in">
-              <div className="relative mb-12 scale-125">
-                <div className="w-24 h-24 border-[6px] border-slate-50 border-t-blue-600 rounded-full animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                   <BrainCircuit className="text-blue-600 w-10 h-10 animate-pulse" />
-                </div>
+              <div className="relative mb-8">
+                <div className="w-20 h-20 border-[4px] border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600 w-8 h-8 animate-pulse" />
               </div>
-              <h2 className="text-3xl font-black text-slate-800 mb-6 uppercase tracking-tighter">AI đang suy nghĩ</h2>
-              <div className="space-y-6 max-w-sm w-full">
-                <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden shadow-inner">
-                   <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 animate-[loading_2s_infinite]"></div>
-                </div>
-                <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest animate-pulse">
-                  {model === AiModel.PRO ? 'Đang phân tích dữ liệu chuyên sâu...' : 'Đang xử lý nhanh tài liệu...'}
-                </p>
-              </div>
+              <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tighter">AI đang phân tích dữ liệu</h2>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest animate-pulse">Vui lòng chờ giây lát...</p>
             </div>
-          )}
-
-          {result && !isProcessing && (
-            <div className="h-full animate-in fade-in zoom-in duration-500">
-              <ExamPreview 
-                content={result} 
-                sourceFiles={files.map(f => ({ name: f.name, base64: f.base64 || '' }))} 
-                apiKey={apiKey}
-              />
+          ) : result ? (
+            <ExamPreview 
+              content={result} 
+              sourceFiles={files.map(f => ({ name: f.name, base64: f.base64 || '' }))} 
+              apiKey={apiKey}
+            />
+          ) : (
+            <div className="bg-white h-full rounded-[40px] shadow-sm border border-dashed border-slate-200 flex flex-col items-center justify-center p-12 text-center">
+              <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6">
+                <FileSearch className="w-12 h-12 text-blue-200" />
+              </div>
+              <h2 className="text-xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Chưa có dữ liệu</h2>
+              <p className="text-slate-400 text-xs font-bold">Tải tệp tin lên để xem kết quả tại đây.</p>
             </div>
           )}
         </div>
       </main>
 
       <footer className="bg-white border-t px-8 py-4 flex justify-between items-center shrink-0">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{COPYRIGHT_TEXT}</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{COPYRIGHT_TEXT}</p>
         <div className="flex items-center gap-4">
-          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Hoà Hiệp AI &copy; 2025</p>
           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-4 py-1.5 rounded-full">{COPYRIGHT_TEXT}</p>
         </div>
       </footer>
 
       <style>{`
-        @keyframes loading {
-          0% { width: 0%; margin-left: 0; }
-          50% { width: 60%; margin-left: 20%; }
-          100% { width: 0%; margin-left: 100%; }
-        }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       `}</style>
     </div>
