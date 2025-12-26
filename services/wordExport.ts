@@ -27,6 +27,8 @@ export const exportToWord = async (contentParts: any[], imagesMap: Map<number, s
     }
 
     if (part.type === 'text' && part.content) {
+      // Clean up math markers for word export if needed, 
+      // but docx doesn't support latex, so we keep text clean.
       const lines = part.content.split('\n');
       lines.forEach((line: string) => {
         const isHeader = line.startsWith('#');
@@ -92,7 +94,7 @@ export const exportToWord = async (contentParts: any[], imagesMap: Map<number, s
                     font: "Times New Roman",
                     size: 20, // 10pt
                     italics: true,
-                    color: "808080",
+                    color: "808080", // Gray
                   }),
                 ],
               }),
@@ -105,5 +107,5 @@ export const exportToWord = async (contentParts: any[], imagesMap: Map<number, s
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, "Tai_Lieu_Tong_Hop.docx");
+  saveAs(blob, "Tai_Lieu_Tong_Hop_HiepAI.docx");
 };
