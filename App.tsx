@@ -97,7 +97,6 @@ const App: React.FC = () => {
         mimeType: f.file.type || 'application/pdf'
       }));
 
-      // Sử dụng API Key từ state/localStorage nếu có, nếu không fallback về env
       const activeKey = apiKey || process.env.API_KEY || '';
       const response = await callGemini(model, fileData, shouldSolve, activeKey);
       setResult(response);
@@ -120,28 +119,32 @@ const App: React.FC = () => {
             <h1 className="text-xl font-black text-blue-900 tracking-tighter">
               {APP_NAME}
             </h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hoà Hiệp AI v3.1</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hoà Hiệp AI v3.2</p>
           </div>
         </div>
         <div className="flex items-center gap-6">
-          <div className="text-right">
-            <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest drop-shadow-sm">
+          <div className="hidden md:block text-right">
+            <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
               {COPYRIGHT_TEXT}
             </p>
           </div>
-          <div className="h-10 w-[1px] bg-slate-100"></div>
+          <div className="h-10 w-[1px] bg-slate-100 hidden md:block"></div>
           <div className="flex bg-slate-100 p-1 rounded-xl">
              <button 
                onClick={() => setModel(AiModel.FLASH)}
-               className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 ${model === AiModel.FLASH ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+               className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex flex-col items-center leading-none gap-1 ${model === AiModel.FLASH ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
              >
-               <Zap className="w-3 h-3" /> FLASH
+               <Zap className="w-3 h-3" /> 
+               <span>FLASH</span>
+               <span className="text-[8px] opacity-60">NHANH</span>
              </button>
              <button 
                onClick={() => setModel(AiModel.PRO)}
-               className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 ${model === AiModel.PRO ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+               className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex flex-col items-center leading-none gap-1 ${model === AiModel.PRO ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
              >
-               <Cpu className="w-3 h-3" /> PRO
+               <Cpu className="w-3 h-3" /> 
+               <span>PRO</span>
+               <span className="text-[8px] opacity-60">THÔNG MINH</span>
              </button>
           </div>
         </div>
@@ -176,7 +179,7 @@ const App: React.FC = () => {
                 {isKeySaved ? <><Edit3 className="w-4 h-4" /> CHỈNH SỬA</> : <><Save className="w-4 h-4" /> LƯU</>}
               </button>
             </div>
-            {!isKeySaved && <p className="mt-2 text-[10px] text-slate-400 italic">API Key được lưu an toàn trong trình duyệt của bạn.</p>}
+            {!isKeySaved && <p className="mt-2 text-[10px] text-slate-400 italic">API Key được lưu an toàn trong trình duyệt.</p>}
           </section>
 
           <section className="bg-white p-6 rounded-3xl shadow-sm border border-blue-50">
@@ -226,7 +229,7 @@ const App: React.FC = () => {
                 <Plus className="text-blue-600 w-8 h-8" />
               </div>
               <p className="font-black text-slate-700 text-sm tracking-tight uppercase">Thêm tài liệu mới</p>
-              <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">PDF, IMAGE, WORD</p>
+              <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">Hỗ trợ PDF, Image, Word</p>
             </div>
 
             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
@@ -241,7 +244,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-black text-slate-700 truncate tracking-tight">{file.name}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Sẵn sàng xử lý</p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase">Sẵn sàng</p>
                   </div>
                   <button 
                     onClick={(e) => { e.stopPropagation(); removeFile(file.id); }}
@@ -270,7 +273,7 @@ const App: React.FC = () => {
               ) : (
                 <>
                   <Send className="w-5 h-5" />
-                  BẮT ĐẦU CHUYỂN ĐỔI
+                  BẮT ĐẦU XỬ LÝ
                 </>
               )}
             </button>
@@ -291,8 +294,8 @@ const App: React.FC = () => {
               <div className="w-32 h-32 bg-blue-50 rounded-[40px] flex items-center justify-center mb-8 rotate-3 shadow-inner">
                 <FileSearch className="w-16 h-16 text-blue-200" />
               </div>
-              <h2 className="text-2xl font-black text-slate-800 mb-3 uppercase tracking-tighter">Khu vực Preview</h2>
-              <p className="text-slate-400 text-sm max-w-xs font-bold leading-relaxed">Vui lòng tải lên tài liệu để bắt đầu quy trình trích xuất và giải bài bằng AI chuyên sâu.</p>
+              <h2 className="text-2xl font-black text-slate-800 mb-3 uppercase tracking-tighter">Khu vực Xem trước</h2>
+              <p className="text-slate-400 text-sm max-w-xs font-bold leading-relaxed">Vui lòng tải lên tài liệu để bắt đầu quy trình chuyển đổi.</p>
             </div>
           )}
 
@@ -304,23 +307,14 @@ const App: React.FC = () => {
                    <BrainCircuit className="text-blue-600 w-10 h-10 animate-pulse" />
                 </div>
               </div>
-              <h2 className="text-3xl font-black text-slate-800 mb-6 uppercase tracking-tighter">AI đang làm việc</h2>
+              <h2 className="text-3xl font-black text-slate-800 mb-6 uppercase tracking-tighter">AI đang suy nghĩ</h2>
               <div className="space-y-6 max-w-sm w-full">
                 <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden shadow-inner">
                    <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 animate-[loading_2s_infinite]"></div>
                 </div>
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="flex items-center justify-center gap-3 text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    Đang quét dữ liệu OCR
-                  </div>
-                  {shouldSolve && (
-                    <div className="flex items-center justify-center gap-3 text-[11px] font-black text-blue-600 uppercase tracking-widest animate-pulse">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Xây dựng lời giải hình học
-                    </div>
-                  )}
-                </div>
+                <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest animate-pulse">
+                  {model === AiModel.PRO ? 'Đang phân tích dữ liệu chuyên sâu...' : 'Đang xử lý nhanh tài liệu...'}
+                </p>
               </div>
             </div>
           )}
@@ -340,7 +334,7 @@ const App: React.FC = () => {
       <footer className="bg-white border-t px-8 py-4 flex justify-between items-center shrink-0">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{COPYRIGHT_TEXT}</p>
         <div className="flex items-center gap-4">
-          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Hoà Hiệp AI &copy; 2025 - All Rights Reserved</p>
+          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Hoà Hiệp AI &copy; 2025</p>
           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-4 py-1.5 rounded-full">{COPYRIGHT_TEXT}</p>
         </div>
       </footer>
